@@ -1,4 +1,5 @@
 import os
+import pickle
 import torch
 import torch.nn as nn 
 import torch.nn.functional as F
@@ -7,8 +8,8 @@ from torch.utils.data import DataLoader
 import torch.optim as optim
 from torchvision.datasets import MNIST
 import torchvision.transforms as tr
-
-## The model
+import numpy as np
+from matplotlib import pyplot as plt
 
 class DownscaleConv2d(nn.Sequential):
     def __init__(self, in_channels, out_channels, padding=1):
@@ -82,7 +83,7 @@ class Vae(nn.Module):
         return self.decoder(h), mu, log_var
 
 
-def loader(train=False, batch_size=16):
+def mnist_loader(train=False, batch_size=16):
     return DataLoader(
         MNIST(
             'generated/data/',
@@ -109,13 +110,18 @@ def train(
         model, 
         beta=1,
         epochs=20, 
+        post_epoch_every=1,
         batch_size=64, 
         learning_rate=1e-3, 
-        checkpoint_path=None
+        train_loader=None,
+        test_loader=None,
+        checkpoint_path=None,
     ):
     # Data:
-    train_loader = loader(train=True, batch_size=batch_size)
-    test_loader = loader(train=False, batch_size=batch_size)
+    if train_loader is None:
+        train_loader = mnist_loader(train=True, batch_size=batch_size)
+    if test_loader is None:
+        test_loader = mnist_loader(train=False, batch_size=batch_size)
 
     # The optimization:
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -139,21 +145,75 @@ def train(
         train_loss /= len(train_loader.dataset)
         train_losses.append(train_loss)
 
-        # Checkpointing:
-        if checkpoint_path is not None:
-            os.makedirs(checkpoint_path, exist_ok=True)
-            torch.save(model.state_dict(), f"{checkpoint_path}/chk{epoch}.pickle");
+        # Not at every epoch:
+        if epoch % post_epoch_every == 0:
+            # Checkpointing:
+            if checkpoint_path is not None:
+                os.makedirs(checkpoint_path, exist_ok=True)
+                torch.save(model.state_dict(), f"{checkpoint_path}/chk{epoch}.pickle");
 
-        # Evaluating on the test:
-        model.eval()
-        test_loss = 0
-        for x, _ in test_loader:
-            xhat, mu, log_var = model(x)
-            test_loss += loss_fn(x, xhat, mu, log_var).item()
-        test_loss /= len(test_loader.dataset)
-        test_losses.append(test_loss)
+            # Evaluating on the test:
+            model.eval()
+            test_loss = 0
+            for x, _ in test_loader:
+                xhat, mu, log_var = model(x)
+                test_loss += loss_fn(x, xhat, mu, log_var).item()
+            test_loss /= len(test_loader.dataset)
+            test_losses.append(test_loss)
 
-        # Some output:
-        print(f"Epoch: {epoch + 1}, Train loss: {train_loss}, Test loss: {test_loss}")
+            # Some output:
+            print(f"Epoch: {epoch + 1}, Train loss: {train_loss}, Test loss: {test_loss}")
 
     return model, train_losses, test_losses
+
+
+def save_model(path, model, train_losses, test_losses):
+    # Saving the model:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    torch.save(model.state_dict(), path + 'vae.pickle')
+
+    # Saving the losses:
+    losses = {
+        'train_losses': train_losses,
+        'test_losses': test_losses
+    }
+    with open(path + 'losses.pickle', 'wb') as f:
+        pickle.dump(losses, f)
+
+
+def load_model(path, model):
+    # Loading the model:
+    model.load_state_dict(torch.load(path + 'vae.pickle'))
+    model.eval()
+
+    # Loading the losses:
+    with open(path + 'losses.pickle', 'rb') as f:
+        losses = pickle.load(f)
+        train_losses = losses['train_losses']
+        test_losses = losses['test_losses']
+
+    # Return all:
+    return model, train_losses, test_losses
+
+def vae_samples_2d(vae, xs=None, ys=None):
+    if xs is None:
+        xs = np.linspace(-3,3,20)
+    if ys is None:
+        ys = np.linspace(-3,3,20)
+    samples = []
+    for y in ys:
+        row = []
+        for x in xs:
+            emb = torch.unsqueeze(torch.tensor([x,y],dtype=torch.float),0)
+            row.append(vae.decoder(emb))
+        samples.append(row)
+    return samples
+
+def plot_vae_samples_2d(samples, cmap=None):
+    _, ax = plt.subplots(len(samples[0]), len(samples), figsize=(12,12))
+    with torch.no_grad():
+        for i in range(len(samples[0])):
+            for j in range(len(samples)):
+                img = torch.squeeze(samples[i][j], 0)
+                ax[i,j].imshow(img.permute(1,2,0), cmap=cmap)
+    plt.show()
