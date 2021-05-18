@@ -151,7 +151,7 @@ def train(
             # Checkpointing:
             if checkpoint_path is not None:
                 os.makedirs(checkpoint_path, exist_ok=True)
-                torch.save(model.state_dict(), f"{checkpoint_path}/chk{epoch}.pickle");
+                torch.save(model.state_dict(), f"{checkpoint_path}/chk{epoch}.pickle")
 
             # Evaluating on the test:
             model.eval()

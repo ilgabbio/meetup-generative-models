@@ -1,10 +1,12 @@
 import os
 from math import sqrt
 import torch
+from torch import Tensor
 from torch.autograd import Function
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from torch.utils.data import Dataset
 from VAE import mnist_loader
 
 
@@ -247,7 +249,7 @@ def train(
             # Checkpointing:
             if checkpoint_path is not None:
                 os.makedirs(checkpoint_path, exist_ok=True)
-                torch.save(model.state_dict(), f"{checkpoint_path}/chk{epoch}.pickle");
+                torch.save(model.state_dict(), f"{checkpoint_path}/chk{epoch}.pickle")
 
             # Evaluating on the test:
             model.eval()
@@ -271,3 +273,38 @@ def vqvae_loss(beta):
         commitment = F.mse_loss(emb, emb_grad.detach())
         return reconstruction + codebook + beta * commitment
     return the_loss
+
+
+def generate_embeddings(vae, dataset):
+    """Preprocessing images from a dataset"""
+    data = ((torch.unsqueeze(img,0), label) for img, label in dataset)
+    data = ((vae.encoder(tens), label) for tens, label in data)
+    data = ((vae.codebook(emb),label) for emb, label in data)
+    data = ((torch.flatten(img),label) for img, label in data)
+    data = (torch.cat([inds,Tensor([label]).int()]) for inds, label in data)
+    return data
+
+
+def generate_embedding_files(vae, is_train):
+    data_loader = mnist_loader(train=is_train)
+    data = list(generate_embeddings(vae, data_loader.dataset))
+    suffix = 'train' if is_train else 'test'
+    torch.save(data, f'generated/vqvae/embedding_{suffix}.pt')
+    print(f"Saved {suffix} embeddings")
+
+
+class EmbeddingDataset(Dataset):
+    def __init__(self, path) -> None:
+        super().__init__()
+        data = torch.load(path)
+        def process(row):
+            img = row.narrow(0,0,row.shape[0]-1)
+            label = row.narrow(0,row.shape[0]-1,1)
+            return img.reshape((1,7,7)).contiguous(), label
+        self.pairs = [process(row) for row in data]
+    
+    def __len__(self):
+        return len(self.pairs)
+    
+    def __getitem__(self, index):
+        return self.pairs[index]
