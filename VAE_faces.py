@@ -9,7 +9,7 @@ from VAE import DownscaleConv2d, UpscaleConv2d, Reshape, Vae
 
 class FacesDataset(Dataset):
     def __init__(self, 
-                 path='data/face_data.csv', 
+                 path='data/face_data.csv.gz', 
                  subind=None,
                  transform=tr.ToTensor()
             ):
@@ -79,4 +79,3 @@ class VaeFaces(Vae):
             # Returning an image with just one channel in [0-1].
             nn.Sigmoid()
         )
-

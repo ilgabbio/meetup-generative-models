@@ -11,36 +11,6 @@ import torchvision.transforms as tr
 import numpy as np
 from matplotlib import pyplot as plt
 
-class DownscaleConv2d(nn.Sequential):
-    def __init__(self, in_channels, out_channels, padding=1):
-        super().__init__(
-            nn.Conv2d(
-                in_channels, out_channels, 
-                kernel_size=3, padding=padding),
-            nn.LeakyReLU(),
-            nn.MaxPool2d(kernel_size=2)
-        )
-
-
-class UpscaleConv2d(nn.Sequential):
-    def __init__(self, in_channels, out_channels, padding=1):
-        super().__init__(
-            nn.Conv2d(
-                in_channels, out_channels, 
-                kernel_size=3, padding=padding),
-            nn.LeakyReLU(),
-            nn.Upsample(scale_factor=2)
-        )
-
-
-class Reshape(nn.Module):
-    def __init__(self, shape):
-        super().__init__()
-        self.shape = shape
-    
-    def forward(self, x):
-        return torch.reshape(x, self.shape)
-
 
 class Vae(nn.Module):
     def __init__(self, hidden_dim=2):
@@ -81,6 +51,37 @@ class Vae(nn.Module):
 
         # Decoding the image:
         return self.decoder(h), mu, log_var
+
+
+class DownscaleConv2d(nn.Sequential):
+    def __init__(self, in_channels, out_channels, padding=1):
+        super().__init__(
+            nn.Conv2d(
+                in_channels, out_channels, 
+                kernel_size=3, padding=padding),
+            nn.LeakyReLU(),
+            nn.MaxPool2d(kernel_size=2)
+        )
+
+
+class UpscaleConv2d(nn.Sequential):
+    def __init__(self, in_channels, out_channels, padding=1):
+        super().__init__(
+            nn.Conv2d(
+                in_channels, out_channels, 
+                kernel_size=3, padding=padding),
+            nn.LeakyReLU(),
+            nn.Upsample(scale_factor=2)
+        )
+
+
+class Reshape(nn.Module):
+    def __init__(self, shape):
+        super().__init__()
+        self.shape = shape
+    
+    def forward(self, x):
+        return torch.reshape(x, self.shape)
 
 
 def mnist_loader(train=False, batch_size=16):
