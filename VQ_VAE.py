@@ -17,7 +17,7 @@ class VqVae(nn.Module):
     Implementation source:
         https://github.com/ritheshkumar95/pytorch-vqvae
     """
-    def __init__(self, hidden_dim=256, latent_vectors=512):
+    def __init__(self, hidden_dim=8, latent_vectors=16):
         super().__init__()
         self.encoder = nn.Sequential(
             # Input 28x28
@@ -47,6 +47,10 @@ class VqVae(nn.Module):
             # Outpout 28x28
         )
         self.apply(_init)
+
+    @property
+    def latent_vectors(self):
+        return self.codebook.embedding.shape[1]
 
     def forward(self, x):
         # Encoding:
@@ -300,7 +304,7 @@ class EmbeddingDataset(Dataset):
         def process(row):
             img = row.narrow(0,0,row.shape[0]-1)
             label = row.narrow(0,row.shape[0]-1,1)
-            return img.reshape((1,7,7)).contiguous(), label
+            return img.reshape((7,7)).contiguous(), label
         self.pairs = [process(row) for row in data]
     
     def __len__(self):
