@@ -17,11 +17,11 @@ class GMM(object):
         # Initializing:
         self._init()
         num_iters = 0
-        ll = 1
+        ll = tol*2
         previous_ll = 0
         
         # EM iterations:
-        while(ll-previous_ll > tol and num_iters < max_iters):
+        while ll-previous_ll > tol and num_iters < max_iters:
             previous_ll = self.loglikelihood()
             self._fit()
             num_iters += 1
@@ -33,8 +33,8 @@ class GMM(object):
         # Init mixture mus/sigmas:
         self.mean_arr = np.asmatrix(np.random.random((self.k, self.n)))
         self.sigma_arr = np.array([np.asmatrix(np.identity(self.n)) for i in range(self.k)])
-        self.phi = np.ones(self.k)/self.k
-        self.w = np.asmatrix(np.empty((self.m, self.k), dtype=float))
+        self.pi = np.ones(self.k)/self.k
+        self.z = np.asmatrix(np.empty((self.m, self.k), dtype=float))
     
     def _fit(self):
         self._e_step()
@@ -51,27 +51,27 @@ class GMM(object):
                     self.mean_arr[j].A1, 
                     self.sigma_arr[j],
                     allow_singular=True
-                ) * self.phi[j]
+                ) * self.pi[j]
                 den += num
-                self.w[i, j] = num
+                self.z[i, j] = num
                 
             # Normalizing we get the latent distribution estimation:
-            self.w[i, :] /= den
-            assert self.w[i, :].sum() - 1 < 1e-4
+            self.z[i, :] /= den
+            assert self.z[i, :].sum() - 1 < 1e-4
             
     def _m_step(self):
         # Every gaussian must be re-estimated...
         for j in range(self.k):
             # ...considering the updated sample contributions:
-            const = self.w[:, j].sum()
-            self.phi[j] = 1/self.m * const
+            const = self.z[:, j].sum()
+            self.pi[j] = 1/self.m * const
             
             # Vanilla mean and covariance matrix computation:
             _mu_j = np.zeros(self.n)
             _sigma_j = np.zeros((self.n, self.n))
             for i in range(self.m):
-                _mu_j += (self.data[i, :] * self.w[i, j])
-                _sigma_j += self.w[i, j] * (
+                _mu_j += (self.data[i, :] * self.z[i, j])
+                _sigma_j += self.z[i, j] * (
                     (self.data[i, :] - self.mean_arr[j, :]).T * (self.data[i, :] - self.mean_arr[j, :])
                 )
             
@@ -91,7 +91,7 @@ class GMM(object):
                     self.mean_arr[j, :].A1, 
                     self.sigma_arr[j, :],
                     allow_singular=True
-                ) * self.phi[j]
+                ) * self.pi[j]
              
             # The log of the computed likelihood:
             ll += np.log(tmp) 
