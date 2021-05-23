@@ -13,12 +13,12 @@ class RBM():
             self.modelW = None 
     
     def bernoulli(self, p):
-        return tf.nn.relu(tf.sign(p - tf.random_uniform(p.shape)))
+        return tf.nn.relu(tf.sign(p - tf.compat.v1.random_uniform(p.shape)))
     
     def energy(self, v):
         b_term = tf.matmul(v, self.bv)
         linear_transform = tf.matmul(v, self.W) + tf.squeeze(self.bh)
-        h_term = tf.reduce_sum(tf.log(tf.exp(linear_transform) + 1), axis=1) 
+        h_term = tf.reduce_sum(tf.compat.v1.log(tf.exp(linear_transform) + 1), axis=1) 
         return tf.reduce_mean(-h_term -b_term)
     
     def sample_h(self, v):
@@ -36,7 +36,7 @@ class RBM():
     
     def train(self, X, lr=0.001, batch_size=64, epochs=5):
         with self.graph.as_default(): 
-            tf_v = tf.placeholder(tf.float32, [batch_size, self.bv.shape[0]])
+            tf_v = tf.compat.v1.placeholder(tf.float32, [batch_size, self.bv.shape[0]])
             v = tf.round(tf_v) 
             vk = tf.identity(v)
 
@@ -48,15 +48,15 @@ class RBM():
                                       parallel_iterations=1,
                                       back_prop=False)
 
-            #vk = tf.stop_gradient(vk) 
+            vk = tf.stop_gradient(vk) 
             energy_v = self.energy(v)
             energy_vk = self.energy(vk)
             loss = energy_v - energy_vk
-            optimizer = tf.train.AdamOptimizer(lr).minimize(loss)
-            init = tf.global_variables_initializer()
+            optimizer = tf.compat.v1.train.AdamOptimizer(lr).minimize(loss)
+            init = tf.compat.v1.global_variables_initializer()
         
         all_losses = []
-        with tf.Session(graph=self.graph) as sess:
+        with tf.compat.v1.Session(graph=self.graph) as sess:
             init.run()
             for epoch in range(epochs): 
                 losses = []
