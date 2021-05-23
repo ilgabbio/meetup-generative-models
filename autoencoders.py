@@ -9,12 +9,12 @@ import matplotlib.pyplot as plt
 __name__ = 'autoencoders'
 
 
-def create_net(l1_regularization):
+def create_net(l1_regularization=None):
     # The regularization:
-    regularizer = l1(0.001) if l1_regularization else None
+    regularizer = l1(l1_regularization) if l1_regularization is not None else None
     
     # The encoder:
-    input_img = Input(shape=(28, 28, 1))
+    input_img = Input(shape=(28, 28, 1)) # 784-dimensional data
     x = Conv2D(16, (3, 3), activation='relu', padding='same')(input_img)
     x = MaxPooling2D((2, 2), padding='same')(x)
     x = Conv2D(8, (3, 3), activation='relu', padding='same')(x)
@@ -61,7 +61,7 @@ def create_net(l1_regularization):
     return autoencoder, encoder, decoder
 
 
-def prepare_data(data, corrupt=False):
+def prepare_data(data):
     data = data.astype('float32') / 255.
     return np.reshape(data, (len(data), 28, 28, 1))
 
