@@ -84,7 +84,7 @@ class Reshape(nn.Module):
         return torch.reshape(x, self.shape)
 
 
-def mnist_loader(train=False, batch_size=16):
+def mnist_loader(train=False, batch_size=16, sampler=None):
     return DataLoader(
         MNIST(
             'generated/data/',
@@ -93,7 +93,9 @@ def mnist_loader(train=False, batch_size=16):
             transform=tr.ToTensor()
         ),
         batch_size=batch_size,
-        shuffle=True)
+        shuffle=True if sampler is None else None,
+        sampler=sampler,
+    )
 
 
 def vae_loss(beta=1):
