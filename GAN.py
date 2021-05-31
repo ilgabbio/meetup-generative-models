@@ -1,9 +1,9 @@
 import os
+import pickle
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import SubsetRandomSampler
 from VAE import mnist_loader, Reshape
 from VQ_VAE import _init
 
@@ -57,7 +57,6 @@ def train(
         epochs=20, 
         post_epoch_every=1,
         batch_size=64, 
-        critic_iterations=1,
         lr_generator=3e-4, 
         lr_discriminator=3e-4, 
         train_loader=None,
@@ -75,7 +74,6 @@ def train(
         train_loader = mnist_loader(
             train=True, 
             batch_size=batch_size,
-            #sampler=SubsetRandomSampler(range(640))
         )
     if test_loader is None:
         test_loader = mnist_loader(train=False, batch_size=batch_size)
@@ -98,29 +96,33 @@ def train(
         train_generator_loss = []
         train_discriminator_loss = []
         for xreal, _ in train_loader:
-            # Many discriminator steps:
-            for _ in range(critic_iterations):
-                # Initialization of the discriminator optimization step:
-                discriminator.train()
-                optimizer_discriminator.zero_grad()
+            # Discriminator
+            # -------------
 
-                # Fake samples:
-                n = xreal.shape[0]
-                xfake = generator(torch.rand((n,8)))
+            # Initialization of the discriminator optimization step:
+            discriminator.train()
+            optimizer_discriminator.zero_grad()
 
-                # The labels:
-                real = torch.full((n,1), 1, dtype=torch.float)
-                fake = torch.full((n,1), 0, dtype=torch.float)
+            # Fake samples:
+            n = xreal.shape[0]
+            xfake = generator(torch.rand((n,8)))
 
-                # The loss:
-                real_loss = adversarial_loss(discriminator(xreal), real)
-                fake_loss = adversarial_loss(discriminator(xfake), fake)
-                discriminator_loss = (real_loss + fake_loss) / 2
-                train_discriminator_loss.append(discriminator_loss.item())
+            # The labels:
+            real = torch.full((n,1), 1, dtype=torch.float)
+            fake = torch.full((n,1), 0, dtype=torch.float)
 
-                # Optimization (discriminator):
-                discriminator_loss.backward()
-                optimizer_discriminator.step()
+            # The loss:
+            real_loss = adversarial_loss(discriminator(xreal), real)
+            fake_loss = adversarial_loss(discriminator(xfake), fake)
+            discriminator_loss = (real_loss + fake_loss) / 2
+            train_discriminator_loss.append(discriminator_loss.item())
+
+            # Optimization (discriminator):
+            discriminator_loss.backward()
+            optimizer_discriminator.step()
+
+            # Generator
+            # ---------
 
             # Initialization of the generator optimization step:
             generator.train()
@@ -183,3 +185,35 @@ def train(
 def model_parameters(model):
     model_parameters = filter(lambda p: p.requires_grad, model.parameters())
     return sum([np.prod(p.size()) for p in model_parameters])
+
+def save_model(path, gen, disc, fakes, losses):
+    # Saving the model:
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    torch.save(gen.state_dict(), path + 'gen.pickle')
+    torch.save(disc.state_dict(), path + 'disc.pickle')
+
+    # The fakes:
+    with open(path + 'fakes.pickle', 'wb') as f:
+        pickle.dump(fakes, f)
+
+    # Saving the losses:
+    with open(path + 'losses.pickle', 'wb') as f:
+        pickle.dump(losses, f)
+
+def load_model(path, gen, disc):
+    # Loading the model:
+    gen.load_state_dict(torch.load(path + 'gen.pickle'))
+    disc.load_state_dict(torch.load(path + 'disc.pickle'))
+    gen.eval()
+    disc.eval()
+
+    # The fakes:
+    with open(path + 'fakes.pickle', 'rb') as f:
+        fakes = pickle.load(f)
+
+    # Loading the losses:
+    with open(path + 'losses.pickle', 'rb') as f:
+        losses = pickle.load(f)
+
+    # Return all:
+    return gen, disc, fakes, losses
