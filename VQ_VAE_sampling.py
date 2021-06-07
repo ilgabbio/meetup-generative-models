@@ -27,7 +27,7 @@ class GatedPixelCNN(nn.Module):
         self.layers = nn.ModuleList()
         for i in range(n_layers):
             # Initial block with Mask-A convolution, rest with Mask-B:
-            if i== 0:
+            if i == 0:
                 self.layers.append(
                     GatedMaskedConv2d('A', hidden_dim, kernel=7, 
                         residual=False, n_classes=n_classes)
@@ -115,7 +115,7 @@ class GatedMaskedConv2d(nn.Module):
             nn.BatchNorm2d(dim * 2)
         )
         self.vert_to_horiz = nn.Sequential(
-            nn.Conv2d(2 * dim, 2 * dim, 1, bias=False),
+            nn.Conv2d(2 * dim, 2 * dim, kernel_size=1, bias=False),
             nn.BatchNorm2d(dim * 2)
         )
         self.horiz_stack = nn.Sequential(
@@ -129,7 +129,7 @@ class GatedMaskedConv2d(nn.Module):
             nn.BatchNorm2d(dim * 2)
         )
         self.horiz_resid = nn.Sequential(
-            nn.Conv2d(dim, dim, 1, bias=False),
+            nn.Conv2d(dim, dim, kernel_size=1, bias=False),
             nn.BatchNorm2d(dim)
         )
 
@@ -150,7 +150,7 @@ class GatedMaskedConv2d(nn.Module):
         h_vert = h_vert[:, :, :x_v.size(-1), :]
         out_v = self.gate(h_vert + h[:, :, None, None])
 
-        # Vertical-stack convolution and gate activation:
+        # Horizontal-stack convolution and gate activation:
         h_horiz = self.horiz_stack(x_h)
         h_horiz = h_horiz[:, :, :, :x_h.size(-2)]
         v2h = self.vert_to_horiz(h_vert)

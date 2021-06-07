@@ -6,6 +6,7 @@ import torch.optim as optim
 from VAE import mnist_loader, Reshape
 from VQ_VAE import _init
 from GAN import model_parameters
+from matplotlib import pyplot as plt
 
 
 class Generator(nn.Sequential):
@@ -58,6 +59,7 @@ def train(
         batch_size=64, 
         critic_iterations=1,
         lr=1e-3, 
+        r1_gamma=None,
         train_loader=None,
         test_loader=None,
         checkpoint_path=None,
@@ -81,15 +83,23 @@ def train(
     optimizer_generator = optim.Adam(generator.parameters(), lr=lr, betas=(0.0001, 0.9))
     optimizer_critic = optim.Adam(critic.parameters(), lr=lr, betas=(0.0001, 0.9))
 
-    # The losses:
+    # The critic loss:
     def critic_loss_fn(xreal, xfake):
         critic_loss = -(torch.mean(critic(xreal)) - torch.mean(critic(xfake)))
-        gp_loss = gradient_penalty(xreal, xfake, critic)
-        #print(f"gp: {gp_loss.item()}")
-        #print(f"cl: {critic_loss.item()}")
-        return critic_loss + lambda_gp*gp_loss
+        if r1_gamma is None:
+            gp_loss = gradient_penalty(xreal, xfake, critic)
+            critic_loss += lambda_gp*gp_loss
+        else:
+            critic_loss += r1_gamma*r1_penalty(xreal, critic)
+            critic_loss += r1_gamma*r2_penalty(xfake, critic)
+        # print(f"critic loss: {critic_loss}")
+        return critic_loss
+
+    # The Generator loss:
     def generator_loss_fn(xfake):
-        return -torch.mean(critic(xfake))
+        generator_loss = -torch.mean(critic(xfake))
+        # print(f"generator loss: {generator_loss}")
+        return generator_loss
 
     # Noise for output fakes generation:
     noise = torch.rand((1,hidden_dims))
@@ -104,9 +114,8 @@ def train(
         train_generator_loss = []
         train_critic_loss = []
         for i, (xreal, _) in enumerate(train_loader):
-            # Initialization of the critic optimization step:
+            # Initialization of the critic model for training:
             critic.train()
-            optimizer_critic.zero_grad()
 
             # Fake samples:
             n = xreal.shape[0]
@@ -117,6 +126,7 @@ def train(
             train_critic_loss.append(critic_loss.item())
 
             # Optimization (critic):
+            optimizer_critic.zero_grad()
             critic_loss.backward()
             optimizer_critic.step()
 
@@ -124,22 +134,20 @@ def train(
             if (i+1) % critic_iterations == 0:
                 # Initialization of the generator optimization step:
                 generator.train()
-                optimizer_generator.zero_grad()
 
                 # The loss:
                 xfake = generator(torch.rand((n,hidden_dims)))
                 generator_loss = generator_loss_fn(xfake)
-                #print(f"Gl: {generator_loss.item()}")
                 train_generator_loss.append(generator_loss.item())
 
                 # Optimization (generator):
+                optimizer_generator.zero_grad()
                 generator_loss.backward()
                 optimizer_generator.step()
         
         # Generating a fake:
         img = generator(noise)[0].permute(1,2,0).detach()
         fakes.append(img)
-        from matplotlib import pyplot as plt
         plt.figure()
         plt.imshow(img)
         plt.show()
@@ -174,7 +182,8 @@ def train(
                 f"{train_generator_losses[-1]}, {train_critic_losses[-1]}, {test_critic_losses[-1]}")
 
     # Completed:
-    return generator, critic, fakes, train_generator_losses, train_critic_losses, test_critic_losses
+    losses = train_generator_losses, train_critic_losses, test_critic_losses
+    return generator, critic, fakes, losses
 
 
 def gradient_penalty(xreal, xfake, critic):
@@ -197,4 +206,31 @@ def gradient_penalty(xreal, xfake, critic):
     grad_xhat = grad_xhat.view((grad_xhat.shape[0], -1))
 
     # Returning its norm - 1 squared:
-    return torch.mean((grad_xhat.norm(2, dim=1) - 1)**2)
+    penalty = torch.mean((grad_xhat.norm(2, dim=1) - 1)**2)
+    return penalty
+
+
+def _critic_gradient_penalty(x, critic, must_clone):
+    # Critic evaluation:
+    if must_clone:
+        x = x.clone()
+        x.requires_grad = True
+    critic_x = critic(x)
+
+    # Obtaining the critic gradient:
+    critic_grad = torch.autograd.grad(
+        inputs=x,
+        outputs=critic_x.sum(),
+        create_graph=True,
+        only_inputs=True,
+    )[0]
+
+    # R1 loss:
+    penalty = critic_grad.square().sum()/2.0
+    return penalty
+
+def r1_penalty(xreal, critic):
+    return _critic_gradient_penalty(xreal, critic, True)
+
+def r2_penalty(xfake, critic):
+    return _critic_gradient_penalty(xfake, critic, False)
