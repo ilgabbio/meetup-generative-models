@@ -20,7 +20,7 @@ class GatedPixelCNN(nn.Module):
         self.hidden_dim = hidden_dim
         self.latent_vectors = latent_vectors
 
-        # Embedding layer to learn code-specific latents:
+        # Embedding layer to learn code-specific latents (discrete -> continuous):
         self.embedding = nn.Embedding(latent_vectors, hidden_dim)
 
         # Building the PixelCNN layer by layer:

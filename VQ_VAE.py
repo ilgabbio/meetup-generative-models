@@ -14,7 +14,7 @@ class VqVae(nn.Module):
     """
     VQ-VAE:
         https://arxiv.org/pdf/1906.00446v1.pdf
-    Implementation source:
+    Implementation inspired by:
         https://github.com/ritheshkumar95/pytorch-vqvae
     """
     def __init__(self, hidden_dim=8, latent_vectors=16):
@@ -177,6 +177,7 @@ class VectorQuantization(Function):
             inputs_sqr = torch.sum(inputs_flatten ** 2, dim=1, keepdim=True)
 
             # Computing the distances \|I - C\|^2 = \|I\|^2 + \|C\|^2 - 2 I C^T:
+            # NOTE: addmm(x,A,B,alpha,beta) = beta x + alpha (A @ B)
             distances = torch.addmm(codebook_sqr + inputs_sqr,
                 inputs_flatten, codebook.t(), alpha=-2.0, beta=1.0)
 
